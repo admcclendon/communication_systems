@@ -1,33 +1,35 @@
 close all
 clear
-%% Basic Parameters
 
+%% Basic Parameters
 Fs = 1e6;
 Ts = 1/Fs;
 
-Fb = 50e3;
+Fb = 10e3;
 Tb = 1/Fb;
 
-N = 1000;
+N = 20;
 
+fc = 100e3;
+fo = 0;
 t = 0:Ts:N*Tb-Ts;
 
-%% Modulation @ fc
+%% Modulation @ baseband
 bits = randi([0 1], 1, N);
 
 z = exp(j*pi*bits);
-I = real(z);
-Q = imag(z);
+Z_upsample = digital_upsample(z, Fs, Fb);
 
-fc = 300e3;
-I_upsample = digital_upsample(I, Fs, Fb);
-Q_upsample = digital_upsample(Q, Fs, Fb);
-y = I_upsample.*cos(2*pi*fc*t) + Q_upsample.*sin(2*pi*fc*t);
-% y = zeros(1, length(t));
-% fc = 100e3;
-% for i = 1:length(t)
-%     y(i) = cos(2*pi*fc*t(i)+bits(floor(t(i)/Tb)+1)*pi) + randn(1);
-% end
+% Pulse shaping
+yx = ones(1,Fs/Fb);
+
+%tx = -3*Tb:Ts:3*Tb;
+%yx = sinc(tx/Tb);
+
+Z_shaped = filter(yx, 1, Z_upsample);
+
+%% Mix up to fc
+y = real(Z_shaped).*cos(2*pi*(fc+fo)*t) + imag(Z_shaped).*sin(2*pi*(fc+fo)*t);
 
 %% Plot Modulated Signal with AWGN
 figure; plot(t*1e3, y);
@@ -52,7 +54,7 @@ axis([fc-4*Fb, fc+4*Fb, -50, 0])
 %% Demodulate signal and filter
 r = y.*cos(2*pi*fc*t);
 
-[b, a] = butter(3, 2*Fb/Fs);
+[b, a] = butter(9, Fb/Fs);
 rf = filter(b, a, r);
 
 %% Calculate I/Q Samples
@@ -88,14 +90,20 @@ xlabel('Time (ms)');
 ylabel('Signal Level');
 
 %% Resample matched filter output
-bits_recv = zeros(1, N);
-
-for i = 1:length(bits_recv)
-    matched_sample = r_m(floor(i*Tb*Fs));
-    if matched_sample > 0
-        bits_recv(i) = 0;
-    else
-        bits_recv(i) = 1;
-    end
-end
+bits_recv = r_m(floor((1:N)*Tb*Fs));
+bits_recv(bits_recv > 0) = 0;
+bits_recv(bits_recv < 0) = 1;
+%for i = 1:length(bits_recv)
+%    matched_sample = r_m(floor(i*Tb*Fs));
+%    if matched_sample > 0
+%        bits_recv(i) = 0;
+%    else
+%        bits_recv(i) = 1;
+%    end
+%end
 sum(abs(bits-bits_recv))
+
+
+r_z = r_i_filtered + j*r_q_filtered;
+bits_upsample = repmat(bits, Fs/Fb, 1);
+figure; plot(diff(unwrap(angle(r_z)))); hold on; plot(bits_upsample(:)); hold off;
