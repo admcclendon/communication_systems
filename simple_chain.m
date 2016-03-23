@@ -14,7 +14,7 @@ mod_symbols = exp(j*(2*pi*symbols/M));
 %% Plot Constellation
 plot_constellation(mod_symbols, 'BPSK Modulated Symbols');
 
-%% Channel Model
+%% Upsample and TX Filter
 Nupsample = 40;
 mod_upsample = [mod_symbols; zeros(Nupsample-1, length(mod_symbols))];
 mod_upsample = mod_upsample(:)';
@@ -24,6 +24,8 @@ tx_filter = sinc((-num*Nupsample:num*Nupsample)/Nupsample);
 
 mod_filtered = conv(tx_filter, mod_upsample);
 
+%% Channel Model
+% IF Carrier
 carrier = exp(j*2*pi*10*(0:length(mod_filtered)-1)/Nupsample);
 
 channel_symbols = mod_filtered.*carrier + 10^(-10/10)*randn(1, length(mod_filtered));
@@ -34,40 +36,36 @@ plot_spectrum(channel_symbols, 'Channel Symbols');
 %% Plot Channel IQ
 plot_iq(channel_symbols, 'Channel Symbols');
 
-%% IF Mixing Stage
-% rx_lo = exp(-j*2*pi*((0:length(channel_symbols)-1)+1)*0.25);
+%% IF Mixing Stage and Costas Loop
 rx_lo = zeros(1, length(channel_symbols));
 rx_mixed = zeros(1, length(channel_symbols));
 phase_detect = zeros(1, length(channel_symbols));
 err = zeros(1, length(channel_symbols));
-% [loop_b, loop_a] = butter(2, 0.6);
+
 loop_b = 0.1*[1 1];
 loop_a = [1 -1];
 loop_z = [];
-loop_z2 = [];
 for n = 1:length(channel_symbols)
     t = (n - 1)/Nupsample;
+    % VCO
     if (n > 1)
-        rx_lo(n) = exp(-j*(2*pi*9.95*t + err(n-1) + 2));
+        rx_lo(n) = exp(-j*(2*pi*9.95*t + err(n-1)));
     else
         rx_lo(n) = exp(-j*(2*pi*10*t));
     end
+    
     rx_mixed(n) = rx_lo(n)*channel_symbols(n);
     
+    % Phase Detector
     phase_detect(n) = real(rx_mixed(n))*imag(rx_mixed(n));
+    % Loop Filter
     [err(n) loop_z] = filter(loop_b, loop_a, phase_detect(n), loop_z);
-%     [err(n) loop_z2] = filter(loop_b2, loop_a2, err(n), loop_z2);
-%     if (n > 1)
-%         err(n) = phase_detect(n)*4 + err(n-1);
-%     else
-%         err(n) = phase_detect(n)*4;
-%     end
 end
-% rx_mixed = rx_lo.*channel_symbols;
+
 %% Plot Error
 figure;
 plot(err);
-% plot_iq(rx_lo, 'RX LO');
+title('Error signal after loop filter');
 
 %% Plot Spectrum
 plot_spectrum(rx_mixed, 'RX after IF Mixing');
