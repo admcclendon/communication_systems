@@ -1,9 +1,12 @@
 alpha = 0.1;
+tau1 = .65;
+tau2 = .3;
+K = 2;
+b = 2*[(1+2*tau1), 2, (1-2*tau1)];
+a = [(tau2*4+K+tau1*K*2), (2*K-tau2*8), (tau2*4+K-tau1*K*2)];
 
-b = alpha*[1 1];
-a = [(alpha + 1), (alpha - 1)];
-
-x = 5*ones(1, 200) + cumsum(0.01*ones(1, 200));
+N = 50;
+x = ones(1, N)+cumsum(ones(1, N));
 
 y = filter(b, a, x);
 
